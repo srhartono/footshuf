@@ -1,8 +1,8 @@
-#1. SYNOPSIS
+# 1. SYNOPSIS
 
 ---
 
-##1.1 Shuffle
+## 1.1 Shuffle
 
 `perl 1_random_peak.pl -i <ENERGY_PIPELINE_PEAK> -l <LABEL> -r <SHUFFLE_NUMBER> -o <PEAK1_SHUFFLE_OUTPUT>`
 
@@ -13,7 +13,7 @@
 
 ---
 
-##1.2 Intersect and statistics
+## 1.2 Intersect and statistics
 
 `perl 2_shuffle_wrapper.pl -x -i 3_intersect.pl -a <PEAK1_SHUFFLE_OUTPUT> -b <FOLDER_OF_FOOTLOOP_PEAKS> -o <OUTPUTDIR>`
 
@@ -28,7 +28,7 @@ If you do dry run (-x), see <OUTPUTDIR>/<LABEL>_run.sh in for scripts of what's 
 
 ---
 
-#1.3.1 <ENERGY_PIPELINE_PEAK> format expectations.
+# 1.3.1 <ENERGY_PIPELINE_PEAK> format expectations.
 
 **Please avoid using non-alphanumeric characters in filename or directories.**
 
@@ -74,7 +74,7 @@ browser position <chr.amplicon>:<start.amplicon>-<end.amplicon>
 - In general, variable names such as <GENE1> and <chr.amplicon> are generally case-sensitive and has to match those in data table at section 2.1. The script will still work, but the script will always produce output with names matching those in the table. The names in data table correspond to UCSC, which we use a lot, therefore it's best to adhere to UCSC naming system to prevent unexpected bugs.
 - <peakname.gene> has to be unique within a gene block.
 
-#1.3.2 Format examples
+# 1.3.2 Format examples
 
 ## A. Good example
 
