@@ -28,7 +28,7 @@ If you do dry run (-x), see <OUTPUTDIR>/<LABEL>_run.sh in for scripts of what's 
 
 ---
 
-# 1.3.1 <ENERGY_PIPELINE_PEAK> format expectations.
+## 1.3.1 <ENERGY_PIPELINE_PEAK> format expectations.
 
 **Please avoid using non-alphanumeric characters in filename or directories.**
 
@@ -74,9 +74,9 @@ browser position <chr.amplicon>:<start.amplicon>-<end.amplicon>
 - In general, variable names such as <GENE1> and <chr.amplicon> are generally case-sensitive and has to match those in data table at section 2.1. The script will still work, but the script will always produce output with names matching those in the table. The names in data table correspond to UCSC, which we use a lot, therefore it's best to adhere to UCSC naming system to prevent unexpected bugs.
 - <peakname.gene> has to be unique within a gene block.
 
-# 1.3.2 Format examples
+## 1.3.2 Format examples
 
-## A. Good example
+### A. Good example
 
 ```
 browser position chr5:72794135-72797124
@@ -100,9 +100,9 @@ chr19 3984929  3985408  NEG2  0  -
 chr19 3985565  3985654  NEG3  0  -
 ```
 
-## B. Bad examples:
+### B. Bad examples:
 
-### B.1. <peakname.gene> is not unique as POS0 appears twice
+#### B.1. <peakname.gene> is not unique as POS0 appears twice
 
 ```
 browser position chr5:72794135-72797124
@@ -112,7 +112,7 @@ chr5  72794344 72794947 **POS0**  0  +
 chr5  72795700 72795781 POS1  0  +
 ```
 
-### B.2. <gene> block appears twice
+#### B.2. <gene> block appears twice
 
 ```
 browser position chr5:72794135-72797124
@@ -133,7 +133,7 @@ chr5 3984929  3985408  NEG2  0  -
 chr5 3985565  3985654  NEG3  0  -
 ```
 
-### B.3. <gene> isn't in amplicon name data table (see section 2.1)
+#### B.3. <gene> isn't in amplicon name data table (see section 2.1)
 
 ```
 browser position chr5:72794135-72797124
@@ -142,7 +142,7 @@ chr5  72794135 72794226 POS0  0  +
 chr5  72795700 72795781 POS1  0  +
 ```
 
-### B.4. <gene> and <chr.amplicon> is in amplicon name data table, but wrong case
+#### B.4. <gene> and <chr.amplicon> is in amplicon name data table, but wrong case
 
 ```
 browser position **ChR5**:72794135-72797124
@@ -153,7 +153,7 @@ chr5  72795700 72795781 POS1  0  +
 
 ---
 
-#2.1 APRIL 2018 amplicon data
+# 2.1 APRIL 2018 amplicon data
 
 ## 2.1.1 amplicon names (<chr.amplicon>)
 
