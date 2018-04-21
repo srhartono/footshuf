@@ -2,7 +2,7 @@
 
 ---
 
-##1.1. Shuffle
+##1.1 Shuffle
 
 `perl 1_random_peak.pl -i <ENERGY_PIPELINE_PEAK> -l <LABEL> -r <SHUFFLE_NUMBER> -o <PEAK1_SHUFFLE_OUTPUT>`
 
@@ -13,7 +13,7 @@
 
 ---
 
-##1.2. Intersect and statistics
+##1.2 Intersect and statistics
 
 `perl 2_shuffle_wrapper.pl -x -i 3_intersect.pl -a <PEAK1_SHUFFLE_OUTPUT> -b <FOLDER_OF_FOOTLOOP_PEAKS> -o <OUTPUTDIR>`
 
@@ -28,35 +28,55 @@ If you do dry run (-x), see <OUTPUTDIR>/<LABEL>_run.sh in for scripts of what's 
 
 ---
 
-#1.3 <ENERGY_PIPELINE_PEAK> format
+#1.3.1 <ENERGY_PIPELINE_PEAK> format expectations.
 
-Each gene block contains:
+**Please avoid using non-alphanumeric characters in filename or directories.**
 
-1. One row of browser position line with amplicon coordinate (space separated)
-2. One row of hashtag followed by gene name
-3. multiple rows of bed6 coordinates (tab separated). Column 5 is necessary for intersect, but value is currently ignored.
+Use [a-z0-9_] to be safe, as while special characters is generally fine, it can and does cause unexpected bugs in the past.
 
+- Good names: `ea_neg7p_bbprob.bed`
+- Danger zone: `ea -0.07% 3.6kbp bbprob.bed`
+
+The script expects multiple gene blocks, where each gene block contains:
+
+1. **One row** of browser position line with amplicon coordinate (space separated)
+   - `browser position <chr.amplicon>:<start.amplicon>-<end.amplicon>`
+2. **One row** of hashtag followed by gene name
+   - `#<GENE>`
+3. **Multiple rows** of tab-separated bed6\*.
+   - `<chr.amplicon.1>   <start.peak.1>   <end.peak.1>   <name1.peak.1>   <value.peak.1>   <strand.peak.1>`
+   - `<chr.amplicon.2>   <start.peak.2>   <end.peak.2>   <name2.peak.2>   <value.peak.2>   <strand.peak.2>`
+
+
+*BED6 means 6 column bed format (see ![BED format explanation from UCSC](https://genome.ucsc.edu/FAQ/FAQformat.html#format1).
+
+
+Example:
 
 ```
 browser position <chr.amplicon>:<start.amplicon>-<end.amplicon>
-#<GENE1>
-<chr.gene>   <start.gene>   <end.gene>   <peakname.gene1>   0   <strand.gene>
-<chr.gene>   <start.gene>   <end.gene>   <peakname.gene2>   0   <strand.gene>
+#<GENE.1>
+<chr.amplicon.1>   <start.peak.1>   <end.peak.1>   <name.peak.1>   <value.peak.1>   <strand.peak.1>
+<chr.amplicon.2>   <start.peak.2>   <end.peak.2>   <name.peak.2>   <value.peak.2>   <strand.peak.2>
 browser position <chr.amplicon>:<start.amplicon>-<end.amplicon>
-#<GENE2>
-<chr.gene>   <start.gene>   <end.gene>   <peakname.gene1>   0   <strand.gene>
-<chr.gene>   <start.gene>   <end.gene>   <peakname.gene2>   0   <strand.gene>
+#<GENE.2>
+<chr.amplicon.1>   <start.peak.1>   <end.peak.1>   <name.peak.1>   <value.peak.1>   <strand.peak.1>
+<chr.amplicon.2>   <start.peak.2>   <end.peak.2>   <name.peak.2>   <value.peak.2>   <strand.peak.2>
 ```
 
-all names are case sensitive (e.g. chr is usually lower case)
+- <value.peak> (5th column) is currently not used, but it's necessary for intersect purpose (as various softwares used in this script e.g. `bedtools`, expects 6 columns in bed6).
+- Currently, all peaks are weighted equally, but if later you'd like to weight peak differently, <value.peak> is where you should store the weight of each peak.
+- In case this isn't already clear: variable names (e.g. chr.amplicon) shouldn't be enclosed with "<" and ">", the above is explicitly shown like that only for example purposes.
 
-peakname.gene has to be:
 
-- either POS or NEG followed by integer (e.g. POS0 or POS1)
-- unique within a gene block
-- order doesn't matter but has to be in order (POS0, POS1, POS2)
+**Important notes:**
 
-## good example
+- In general, variable names such as <GENE1> and <chr.amplicon> are generally case-sensitive and has to match those in data table at section 2.1. The script will still work, but the script will always produce output with names matching those in the table. The names in data table correspond to UCSC, which we use a lot, therefore it's best to adhere to UCSC naming system to prevent unexpected bugs.
+- <peakname.gene> has to be unique within a gene block.
+
+#1.3.2 Format examples
+
+## A. Good example
 
 ```
 browser position chr5:72794135-72797124
@@ -80,23 +100,23 @@ chr19 3984929  3985408  NEG2  0  -
 chr19 3985565  3985654  NEG3  0  -
 ```
 
-##bad examples:
+## B. Bad examples:
 
-###<peakname.gene> is not unique as POS0 appears twice
+### B.1. <peakname.gene> is not unique as POS0 appears twice
 
 ```
 browser position chr5:72794135-72797124
 #BTF3
-chr5  72794135 72794226 POS0  0  +
-chr5  72794344 72794947 POS0  0  +
+chr5  72794135 72794226 **POS0 ** 0  +
+chr5  72794344 72794947 **POS0**  0  +
 chr5  72795700 72795781 POS1  0  +
 ```
 
-###2. <gene> block appears twice
+### B.2. <gene> block appears twice
 
 ```
 browser position chr5:72794135-72797124
-#BTF3
+**#BTF3**
 chr5  72794135 72794226 POS0  0  +
 chr5  72795700 72795781 POS1  0  +
 browser position chr3:128900662-128903317
@@ -106,27 +126,27 @@ chr3  128900883   128900967   NEG1  0  -
 chr3  128901151   128901214   NEG2  0  -
 chr3  128903250   128903316   NEG3  0  -
 browser position chr19:3982336-3985724
-#BTF3
+**#BTF3**
 chr5 3982340  3982408  NEG0  0  -
 chr5 3982445  3983188  NEG1  0  -
 chr5 3984929  3985408  NEG2  0  -
 chr5 3985565  3985654  NEG3  0  -
 ```
 
-###3. <gene> isn't in amplicon name data (see section 2.1)
+### B.3. <gene> isn't in amplicon name data table (see section 2.1)
 
 ```
 browser position chr5:72794135-72797124
-#BTF3-P
+**#BTF3-P**
 chr5  72794135 72794226 POS0  0  +
 chr5  72795700 72795781 POS1  0  +
 ```
 
-###4. <gene> and <chr.amplicon> is in amplicon name data but wrong case
+### B.4. <gene> and <chr.amplicon> is in amplicon name data table, but wrong case
 
 ```
-browser position ChR5:72794135-72797124
-#btf3
+browser position **ChR5**:72794135-72797124
+**#btf3**
 chr5  72794135 72794226 POS0  0  +
 chr5  72795700 72795781 POS1  0  +
 ```
@@ -135,11 +155,11 @@ chr5  72795700 72795781 POS1  0  +
 
 #2.1 APRIL 2018 amplicon data
 
-## 2.1.1 amplicon names
+## 2.1.1 amplicon names (<chr.amplicon>)
+
+### A. IN VIVO
 
 ```
-# IN VIVO
-# --------
 BTF3
 CALM3
 CEP95
@@ -170,23 +190,25 @@ TOMM20
 TOMM40
 TRIM33
 WDR3
-# --------
+5SrDNA3
+18SrDNA1
+28SdrDNA6
+28SprDNA1
+```
 
-# IN VITRO
-# --------
+### B. IN VITRO
+
+```
 pFC53_AIRN_REVERSE
 PFC8_SNRPN_REVERSE
 pFC66_AIRN_FORWARD
-# --------
-
 ```
 
 ## 2.1.2 amplicon coordinates
 
-```
+### A. IN VIVO
 
-# IN VIVO
-# --------
+```
 chr5	72794135	72797124	BTF3	0	+
 chr19	47111177	47113789	CALM3	0	+
 chr17	62531459	62535650	CEP95	0	+
@@ -217,12 +239,16 @@ chr1	235272022	235275548	TOMM20	0	-
 chr19	45405433	45408838	TOMM40	0	+
 chr1	114931599	114934994	TRIM33	0	-
 chr1	118471462	118475880	WDR3	0	+
-# --------
+U13369	305	2711	5SrDNA3	+
+U13369	3736	5508	18SrDNA1	+
+U13369	7984	10780	28SdrDNA6	+
+U13369	11613	12888	28SprDNA1	+
+```
 
-# IN VITRO
-# --------
+### B. IN VITRO
+
+```
 pFC53FIXED	80	1829	pFC53_AIRN_REVERSE	0	-
 pFC19FIXED	80	1512	PFC8_SNRPN_REVERSE	0	-
 pFC66FIXED	212	2180	pFC66_AIRN_FORWARD	0	+
-# --------
 ```
