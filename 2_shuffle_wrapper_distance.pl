@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 
 use strict; use warnings; use Getopt::Std;
-use vars qw($opt_v $opt_f $opt_w $opt_t $opt_g $opt_s $opt_c $opt_o $opt_i $opt_a $opt_b $opt_R $opt_h $opt_F);
-getopts("vfw:t:g:s:cho:i:a:b:RfF");
+use vars qw($opt_v $opt_f $opt_w $opt_t $opt_g $opt_s $opt_c $opt_o $opt_i $opt_a $opt_b $opt_R $opt_h $opt_F $opt_x);
+getopts("vfw:t:g:s:cho:i:a:b:RfFx");
 
 my ($N,$GN,$YW,$CY,$RD,$PR,$LGN,$LCY,$LRD) = ("\e[0m","\e[0;32m","\e[1;33m","\e[0;36m","\e[0;31m","\e[0;35m","\e[1;32m","\e[1;36m","\e[1;31m","\e[1;35m");
 my ($script, $dir1, $dir2) = ($opt_i, $opt_a, $opt_b);
@@ -11,7 +11,7 @@ die "\nusage: $YW$0$N [options] $LCY-o$N <Output Dir> $LCY-i$N <3_intersect.pl> 
 This script will intersect predicted peaks with footloop peaks 
 if predicted peaks are Pos strand (e.g. CALM3) then footloop peaks intersect will only be Pos strand, and vice versa
 
--R: don't run the sbatch
+-x: DRY RUN (don't run the sbatch)
 
 Options (without these it'll just intersect all files in -b with -a)
 -w (e.g. 10 for 10bp) intersect files with this window
@@ -36,68 +36,75 @@ $script = "perl $script";
 my @dir1 = <$dir1/*.bed>;
 my ($labelz) = `cat $dir1/.LABEL`; chomp($labelz);
 die "There is not .bed file in -a $dir1\n" if @dir1 == 0;
-foreach my $file1 (@dir1) {
-	my $file1TEMP = $file1;
-	($file1TEMP) = getFilename($file1TEMP, 'full');
-   my ($gene, $type, $number) = $file1TEMP =~ /^$labelz\_(\w+)_(\w)_(\d+).bed$/;
-      ($gene, $number) = $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+).bed$/ if $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+).bed$/;
-      ($gene, $number) = $file1TEMP =~ /^$labelz\_([A-Za-z0-9]+)_(\d+).bed$/ if $file1TEMP =~ /^$labelz\_([A-Za-z0-9]+)_(\d+).bed$/;
-      $type = "NOTYPE" if $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+).bed$/;
+print "\n$YW --------------------------------- $N\n";
+print "\n${YW}A$N. Parsing from -a $LCY$dir1$N\n";
+for (my $i = 0; $i < @dir1; $i++) {
+   my $file1 = $dir1[$i];
+   if (defined $opt_g) {
+		next if $file1 !~ /$opt_g/;
+   }
+   my $file1TEMP = $file1;
+   ($file1TEMP) = getFilename($file1TEMP, 'full');
+   my ($gene, $type, $number, $strand) = $file1TEMP =~ /^$labelz\_(\w+)_(\w)_(\d+)_(Pos|Neg).bed$/;
+      ($gene, $number, $strand) = $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+)_(Pos|Neg).bed$/ if $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+)_(Pos|Neg).bed$/;
+      ($gene, $number, $strand) = $file1TEMP =~ /^$labelz\_([A-Za-z0-9]+)_(\d+)_(Pos|Neg).bed$/ if $file1TEMP =~ /^$labelz\_([A-Za-z0-9]+)_(\d+)_(Pos|Neg).bed$/;
+      $type = "NOTYPE" if $file1TEMP =~ /^$labelz\_([A-Za-z0-9_]+)_(\d+)_(Pos|Neg).bed$/;
       $gene = uc($gene);
-
-	#print "file1=$file1TEMP gene=$gene, type=$type, number=$number\n";
-	print "Warning: gene $gene has multiple names\n" if defined $data{$gene}{$file1};
-	$data{$gene}{$file1} = $type;
-	my @pos = `grep ",POS0," $file1`;
-	my @neg = `grep ",NEG0," $file1`;
-	$strand{$gene} = @pos > 0 ? "Pos" : @neg > 0 ? "Neg" : "Unk";
+   die "CAnnot parse filename from file $file1\n\n" if not defined $strand;
+   #print "file1=$file1TEMP gene=$gene, type=$type, number=$number\n";
+   print "  $YW$i$N. Parsed $LGN$file1TEMP$N gene=$LCY$gene$N, strand=$LGN$strand$N\n";
+   print "\nWarning: gene $LRD$gene$N has multiple names\n" if defined $data{$gene}{$file1};
+   $data{$gene}{$file1} = $type;
+   $strand{$gene} =$strand;
 }
 mkdir $opt_o if not -d $opt_o;
 if (not -d $opt_o) {die "Cannot create directory $LCY$opt_o$N: $!\n"}
 mkdir "$opt_o/TEMP" if not -d "$opt_o/TEMP";
 if (not -d "$opt_o/TEMP") {die "Cannot create directory $LCY$opt_o/TEMP$N: $!\n"}
 
-
 my @outputs;
 my $exist = 0;
-my @dir2 = `ls -Ra $dir2`;
+my @dir2 = <$dir2/*.PEAK.genome.bed>;#genome.bed`ls -Ra $dir2`;
+die "\n\nERROR: Directory $LCY$dir2$N doesn't have any .genome.bed files!\n" if @dir2 == 0;
+
+print "\n$YW --------------------------------- $N\n";
+print "\n${YW}B$N. Parsing from -b $LCY$dir2$N\n";
 my $dir2curr;
 my %file2;
 my $count = 0;
 open (my $outshell, ">", "$opt_o/$labelz\_run.sh") or die;
 print $outshell "#!/bin/bash -l\n#SBATCH -p high --mem 16000\n";
-my $print = ""; my %skipped;
+my $print = ""; my %skipped; my $fileCount = 0;
+my $skipped = 0;
 for (my $i = 0; $i < @dir2; $i++) {
-	chomp($dir2[$i]);
-	if ($dir2[$i] =~ /:$/) {
-		$dir2curr = $dir2[$i]; $dir2curr =~ s/:$//;
-	}
-	else {
-		my $file2 = $dir2curr . "/" . $dir2[$i];
-		next if $file2 !~ /.PEAKS$/;
-		# create directory similar to footpeak one
-		my @dirs2 = split("/", $dir2curr);
-		my $curroutdir = "$opt_o/TEMP/";
-		for (my $k = 0; $k < @dirs2; $k++) {
-			$curroutdir .= "$dirs2[$k]/";
-		#	print "Making $curroutdir\n" if not -d $curroutdir;
-			mkdir $curroutdir if not -d $curroutdir;
+      chomp($dir2[$i]);
+      my $file2 = $dir2[$i];
+      next if $file2 !~ /.PEAK.genome.bed$/;
+		if (defined $opt_g) {
+			next if $file2 !~ /$opt_g/;
 		}
-		my ($label, $gene, $strand, $window, $threshold, $convType) = $dir2[$i] =~ /^(.+)_gene(.+)_Pos|Neg|Unk)_(\d+)_(\d+\.?\d*)_(CH|GH|CG|GC)/;
+      $fileCount ++;
+      my ($dir2curr, $file2Name) = getFilename($file2, "folderfull");
+      # create directory similar to footpeak one
+      my @dirs2 = split("/", $dir2curr);
+      my $curroutdir = "$opt_o/TEMP/";
+      for (my $k = 0; $k < @dirs2; $k++) {
+         $curroutdir .= "$dirs2[$k]/";
+      #  print "Making $curroutdir\n" if not -d $curroutdir;
+         mkdir $curroutdir if not -d $curroutdir;
+      }
+      my ($label, $gene, $strand, $window, $threshold, $convType) = $file2Name =~ /^(.+)_gene(.+)_(Pos|Neg|Unk)_(\d+)_(\d+\.?\d*)_(CH|GH|CG|GC)/;
+      print "  $YW$fileCount$N. Parsed $LGN$file2Name$N label=$PR$label$N gene=$LCY$gene$N strand=$LGN$strand$N window=$window$N thres=$LGN$threshold$N type=$YW$convType$N\n";
       die "Cannot parse from file in footpeak $LCY$dir2[$i]$N\n" if not defined $threshold or not defined $gene;
 		$gene = "NA" if not defined $gene;
 		$gene = uc($gene);
-		if (defined $opt_g) {
-			next if $gene eq "NA";
-			next if $gene ne $opt_g;
-		}
-		my $geneStrand = $strand{$gene};
-		if (not defined $data{$gene} and not defined $skipped{$gene}) {
+		if (not defined $data{$gene}) {
 			$skipped{$gene} = 1;
-			$print .= "gene $gene from FOOTPEAK is skipped as this gene does not have any Robert's predicted peaks (no bed file exists in $dir1)\n";
+         print "    -> gene $LCY$gene$N is skipped as files containing gene doesn't exists in -a $LCY$dir1$N\n";
+			$skipped ++;
 			next;
 		}
-		next if not defined $geneStrand;
+		my $geneStrand = $strand{$gene};
 		$strand = "NA" if not defined $strand;
 		$window = "NA" if not defined $window;
 		$threshold = "NA" if not defined $threshold;
@@ -106,7 +113,6 @@ for (my $i = 0; $i < @dir2; $i++) {
 		next if $geneStrand ne $strand; 
 		next if $strand eq "Pos" and $convType !~ /^(CH|CG)$/;
 		next if $strand eq "Neg" and $convType !~ /^(GH|GC)$/;
-#		die "gene=$gene, strand=$strand, window=$window, threshold=$threshold, $convType = $convType\n";
 		if (defined $opt_w) {
 			next if $window eq "NA";
 			next if $window != $opt_w;
@@ -123,7 +129,6 @@ for (my $i = 0; $i < @dir2; $i++) {
 			next if $convType eq "NA";
 			next if $convType !~ /^(GC|CG)$/;
 		}
-		#print "$file2\n\tgene=$gene, strand=$strand, window=$window, thresold=$threshold, convType=$convType\n" if $file2 =~ /.PEAKS$/;
 		foreach my $file1 (sort keys %{$data{$gene}}) {
 			my $type = $data{$gene}{$file1};
 			my ($folder1, $fileName1) = getFilename($file1, "folderfull");
@@ -131,21 +136,20 @@ for (my $i = 0; $i < @dir2; $i++) {
 			$fileName2 =~ s/.PEAK.PEAKS$//;
          my ($fileName22) = $file2 =~ /($fileName2.+)\.PEAK.PEAKS$/;
          $fileName2 = defined $fileName22 ? $fileName22 : $fileName2;
-#         my $output = "$folder2/$fileName1\_$fileName2.STAT";
 			my ($shuffledFolder, $shuffledFilename) = getFilename($file1, "folderfull");
 			my ($footPeakFolder, $footPeakFilename) = getFilename($file2, "folderfull");
          my $output = "$curroutdir/$labelz\_$shuffledFilename\_$footPeakFilename.STAT";
-			#print "2: $output\n";
 			push(@outputs, $output);
 			print $outshell "$script $file1 $file2 $opt_o $gene $type $strand $window $threshold $convType $curroutdir $labelz\n" if defined $opt_F or (not defined $opt_F and not -e $output) or (not defined $opt_F and -e $output and -s $output == 0);
-#			system("$script $file1 $file2 $gene $type $strand $window $threshold $convType");
+         print "       OUTPUT = $YW$output$N\n\n" if -e $output;
 			$exist ++ if -e $output;
 			$count ++;
 		}
-	}
 }
-print "\n" . $print . "\n";
-open (my $out3, ">", "$opt_o/$labelz\_STAT_DIST.sh") or die;
+my $parsed = $fileCount - $skipped;
+print "\nSomehow parsed ($parsed) differs from count ($count)\n" if $parsed ne $count;
+print "\nSuccessfully parsed $LGN$count$N/$LCY$fileCount$N files from -b $LCY$dir2$N\n --> skipped $LGN$skipped$N files as their related genes don't exist in -a $LCY$dir1$N\n";
+open (my $out3, ">", "$opt_o/$labelz\_STAT.sh") or die;
 print $out3 "#!/bin/bash\n";
 my $good = 0;
 for (my $i = 0; $i < @outputs; $i++) {
@@ -160,31 +164,31 @@ for (my $i = 0; $i < @outputs; $i++) {
 }
 close $out3;
 
-if (not defined $opt_R) {
-	my ($job) = `sbatch $opt_o/$labelz\_run.sh` =~ /job (\d+)$/;
-	print "\nRunning: sbatch $opt_o/$labelz\_run.sh\nJob ID: $job\n\n";
-}
-else {
-	print "\n-R is on: NOT RUNNING: sbatch $opt_o/$labelz\_run.sh\n\n";
-}
+print "\n$YW --------------------------------- $N\n";
 if ($exist < $count or defined $opt_F) {
-	my $remaining = $count - $exist;
-	if (not defined $opt_F) {
-		print "This will run all necessary intersects that haven't been run yet ($LGN$remaining$N/$LCY$count$N runs left)\n";
-		print "Use -f when using this script to force run all intersects (doesn't matter if the output file exists or not)\n\n";
-	}
+   my $remaining = $count - $exist;
+   if (not defined $opt_F) {
+      print "\n$LGN$remaining$N/$LCY$count$N runs left.\n";
+      print "$LGN$exist$N intersect outputs already exists\n" if $exist != 0;
+      print " --> Use -F to force re-run all intersects overwriting previous intersects\n" if $exist != 0;
+
+   }
 }
 else {
-	print "All intersects ($LGN$exist$N/$LCY$count$N) has been run!\n";
+   print "All intersects ($LGN$exist$N/$LCY$count$N) has been run!\n";
 }
-print "
 
-Statistics from $exist intersect files will be concatenated into$LCY $opt_o/$labelz\_STAT.tsv$N
-If once $opt_o/$labelz\_run.sh is done but there's no $opt_o/$labelz\_STAT.tsv, then manually run $LCY$opt_o/$labelz\_STAT.sh$N to concatenate all intersect stats.\n\n";
+print "\n$YW --------------------------------- $N\n";
+print "Statistics from $LGN$count$N intersect files will be concatenated into$LCY $opt_o/$labelz\_STAT.tsv$N\n";
 
-#If total intersected is $exist < total=$count, then run the $opt_o.sh and it'll intersect whatever not exist yet
-#Add -f when using this script if you want to redo everything (and not just intersect whatever not exist).
-#Concatenated Output from $exist files: $opt_o
+if (not defined $opt_x) {
+   my ($job) = `sbatch $opt_o/$labelz\_run.sh` =~ /job (\d+)$/;
+   print "\nRunning: sbatch $opt_o/$labelz\_run.sh\nJob ID: $job\n\n";
+}
+else {
+   print "\nDry run completed! (-x). See:\n\n$LCY$opt_o/$labelz\_run.sh$N\n\n";
+   exit;
+}
 
 sub getFilename {
     my ($fh, $type) = @_;
@@ -273,3 +277,32 @@ die "-c must be either CH/CG/GH/GC (case sensitive)\n" if defined $opt_c and $op
 		Similarly, G will be expected conversion in a Neg strand read and not C
 		so we only use Neg_GH and Neg_GC and not Neg_CH and Neg_CG.
 -c (CH/CG/GH/GC) get files with this conversion type only (disabled if -s is Rel)
+
+
+__END__
+if (not defined $opt_R) {
+	my ($job) = `sbatch $opt_o/$labelz\_run.sh` =~ /job (\d+)$/;
+	print "\nRunning: sbatch $opt_o/$labelz\_run.sh\nJob ID: $job\n\n";
+}
+else {
+	print "\n-R is on: NOT RUNNING: sbatch $opt_o/$labelz\_run.sh\n\n";
+}
+if ($exist < $count or defined $opt_F) {
+	my $remaining = $count - $exist;
+	if (not defined $opt_F) {
+		print "This will run all necessary intersects that haven't been run yet ($LGN$remaining$N/$LCY$count$N runs left)\n";
+		print "Use -f when using this script to force run all intersects (doesn't matter if the output file exists or not)\n\n";
+	}
+}
+else {
+	print "All intersects ($LGN$exist$N/$LCY$count$N) has been run!\n";
+}
+print "
+
+Statistics from $exist intersect files will be concatenated into$LCY $opt_o/$labelz\_STAT.tsv$N
+If once $opt_o/$labelz\_run.sh is done but there's no $opt_o/$labelz\_STAT.tsv, then manually run $LCY$opt_o/$labelz\_STAT.sh$N to concatenate all intersect stats.\n\n";
+
+#If total intersected is $exist < total=$count, then run the $opt_o.sh and it'll intersect whatever not exist yet
+#Add -f when using this script if you want to redo everything (and not just intersect whatever not exist).
+#Concatenated Output from $exist files: $opt_o
+

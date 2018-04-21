@@ -58,6 +58,8 @@ while (my $line = <$in1>) {
 		($GENE) = $line =~ /^#(.+)$/;
 		die "Cannot read gene name under line=$line2:\nline=$line\n" if not defined $GENE;
 		@{$peaks->{$GENE_COUNT}{bcoor}} = ($CHR0, $BEG0, $END0);
+		$peaks->{$GENE_COUNT}{strandc}{Pos} = 0;
+		$peaks->{$GENE_COUNT}{strandc}{Neg} = 0;
 #		$line = <$in1>; chomp($line);
 #		LOG($outLog, "Line does not contain track_name! ($line)\n") if $line !~ /track name/;
 #		($GENE) = $line =~ /description="HG19_(\w+(\-\w+)*)_\w+|DNA"/;
@@ -65,6 +67,9 @@ while (my $line = <$in1>) {
 	}
 	elsif (@arr >= 3) {
 		my ($chr, $beg, $end, $name, $zero, $strand) = split("\t", $line);
+		die "Undefined col6 strand at line\n\n$line\n\n" if not defined $strand;
+		my $strandz = $strand eq "+" ? "Pos" : $strand eq "-" ? "Neg" : die "Strand has to be either + or - (current: $strand)\n\n$line\n\n";
+		$peaks->{$GENE_COUNT}{strandc}{$strandz} ++;
 		my ($CHR0, $BEG0, $END0) = @{$peaks->{$GENE_COUNT}{bcoor}};
 		LOG($outLog, "\n\n\e[0;31mERROR!!\e[0m: Undefined chr, beg, end, or name at line=$line\n") and die if not defined ($chr . $beg . $end . $name);
 		LOG($outLog, "\n\n\e[0;31mERROR!!\e[0m: Current track's CHR is $LGN$CHR0$N  but current line's chr is $LCY$chr$N at line=$line\n") and die if $chr ne $CHR0;
@@ -81,6 +86,9 @@ foreach my $GENE_COUNT (sort {$a <=> $b} keys %{$peaks}) {
 	my $GENE = $peaks->{$GENE_COUNT}{gene};
 	my $total = @{$peaks->{$GENE_COUNT}{coor}};
 	my ($CHR0, $BEG0, $END0) = @{$peaks->{$GENE_COUNT}{bcoor}};
+	my $strandPos = $peaks->{$GENE_COUNT}{strandc}{Pos};
+	my $strandNeg = $peaks->{$GENE_COUNT}{strandc}{Neg};
+	$peaks->{$GENE_COUNT}{strand} = $strandPos >= $strandNeg ? "Pos" : "Neg";
 	LOG($outLog, "\e[0;33m$GENE_COUNT\e[0m. \e[0;36m$GENE\e[0m (\e[0;32m$total\e[0m total peaks)\n");
 	for (my $i = 0; $i < @{$peaks->{$GENE_COUNT}{coor}}; $i++) {
 		my ($chr, $beg, $end, $name, $strand) = split(",", $peaks->{$GENE_COUNT}{coor}[$i]);
@@ -97,13 +105,14 @@ foreach my $GENE_COUNT (sort {$a <=> $b} keys %{$peaks}) {
 	my $gene = $peaks->{$GENE_COUNT}{gene};
 	my $coor = $peaks->{$GENE_COUNT}{coor};
 	my $bcoor = $peaks->{$GENE_COUNT}{bcoor};
+	my $strand = $peaks->{$GENE_COUNT}{strand};
 	next if not defined $coor;
 	next if not defined $bcoor;
 	next if not defined $gene;
 	#next if $gene !~ /CALM3/;
 	LOG($outLog, "$gene:\n\t- " . join("\n\t- ", @{$coor}) . "\n",1);
 	LOG($outLog, "$geneCount. Shuffled $LGN" . scalar(@{$coor}) . "$N peaks $PR$randNum$N times from gene $LCY$gene$N\n");
-	shuf($gene, $GENE_COUNT, $coor, $bcoor, $outDir, $outLog, $label);
+	shuf($gene, $GENE_COUNT, $coor, $bcoor, $outDir, $outLog, $label, $strand);
 	$geneCount ++;
 }
 LOG($outLog, "Log file: $logFile\n");
@@ -131,17 +140,17 @@ sub LOG {
 	print $outLog $text;
 }
 sub shuf {
-	my ($id, $id_count, $coor, $bcoor, $outDir, $outLog, $label) = @_;
+	my ($id, $id_count, $coor, $bcoor, $outDir, $outLog, $label, $strand) = @_;
 	LOG($outLog, "Undefined \$coor or \$bcoor->{'GENE'} id=$id\n") and die if not defined $coor or not defined $bcoor;
 	my ($CHR, $BEG0, $END0) = @{$bcoor};
 	my ($gene, $type) = $id =~ /^(\w+)(\-\w)?$/;
 	$type = "" if not defined $type; $type =~ s/\-//; $type = "_$type" if $type ne "";
 	my $BEG = 1; my $END = $END0 - $BEG0; my $LEN0 = $END0 - $BEG0;
 	LOG($outLog, "CHR=$CHR, $BEG-$END, BEG=$BEG0, END=$END0, LEN=$LEN0, GENE=$gene, TYPE=$type, GENE_COUNT=$id_count, BEG=$BEG, END=$END\n",1);
-	open (my $out1, ">", "$outDir/$label\_$gene$type\_$id_count.bed") or die "Cannot write to $gene.bed: $!\n";
+	open (my $out1, ">", "$outDir/$label\_$gene$type\_$id_count\_$strand.bed") or die "Cannot write to $gene.bed: $!\n";
 	my $meanIter; my $print;
 	for (my $i = 0; $i < $randNum; $i++) {
-		($print, $meanIter) = shuffle_coor("$gene$type\_$id_count", $coor, $CHR, $BEG0, $END0, $i, $meanIter, $outLog);
+		($print, $meanIter) = shuffle_coor("$gene$type\_$id_count\_$strand", $coor, $CHR, $BEG0, $END0, $i, $meanIter, $outLog);
 		print $out1 $print;
 	}
 	close $out1;
